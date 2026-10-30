@@ -1,0 +1,106 @@
+import type { DeepPartial } from "../utils";
+import { CameraLiveScannerResolution } from "../sdk/Camera";
+import { CameraPreviewMode } from "./Common";
+/**
+The ideal resolution of the camera preview.
+*/
+export declare class Resolution {
+    /**
+      Width of the resolution.
+      */
+    width: number;
+    /**
+      Height of the resolution.
+      */
+    height: number;
+    /** @param source {@displayType `DeepPartial<Resolution>`} */
+    constructor(source?: DeepPartial<Resolution>);
+}
+/**
+Determines which camera module to use on start-up.
+
+- `FRONT`:
+   Use the front camera.
+- `BACK`:
+   Use the default back camera.
+*/
+export type CameraModule = 
+/**
+  Use the front camera.
+  */
+"FRONT"
+/**
+  Use the default back camera.
+  */
+ | "BACK";
+/** @hidden */
+export declare const CameraModuleValues: ReadonlyArray<CameraModule>;
+/**
+Tries to select the camera preview aspect ratio that best matches the given aspect ratio. If no exact match is found, it selects the closest one available. Android only.
+
+- `RATIO_4_3`:
+   Standard preview aspect ratio used by most of the devices.
+- `RATIO_16_9`:
+   Widescreen preview aspect ratio used by some devices.
+*/
+export type CameraPreviewAspectRatio = 
+/**
+  Standard preview aspect ratio used by most of the devices.
+  */
+"RATIO_4_3"
+/**
+  Widescreen preview aspect ratio used by some devices.
+  */
+ | "RATIO_16_9";
+/** @hidden */
+export declare const CameraPreviewAspectRatioValues: ReadonlyArray<CameraPreviewAspectRatio>;
+/**
+Configuration of the camera settings to be used while scanning.
+*/
+export declare class CameraConfiguration {
+    /**
+      Determines which camera module to use on start-up.
+      @defaultValue "BACK";
+      */
+    cameraModule: CameraModule;
+    /**
+      The zoom steps available to the user.
+      @defaultValue [1.0, 2.0, 5.0];
+      */
+    zoomSteps: number[];
+    /**
+      The default zoom factor on start-up.
+      @defaultValue 1.0;
+      */
+    defaultZoomFactor: number;
+    /**
+      Determines whether the flash is enabled on start-up.
+      @defaultValue false;
+      */
+    flashEnabled: boolean;
+    /**
+      Determines which camera preview mode to use.
+      @defaultValue "FILL_IN";
+      */
+    cameraPreviewMode: CameraPreviewMode;
+    /**
+      The ideal resolution for the camera preview. Actual resolution may vary depending on browser and device capabilities.
+      @defaultValue new Resolution({
+          "width": 1920,
+          "height": 1080
+      });
+      */
+    idealPreviewResolution: Resolution;
+    /**
+      The rate of detections/recognitions per second in normal performance mode. If the number is equal or greater than the video frame rate, no frames will be skipped.
+      @defaultValue 20;
+      */
+    fpsLimit: number;
+    /**
+      The size of the image from camera which would be sent to the scanner for live scanning.
+      @defaultValue "FULL_HD";
+      */
+    cameraLiveScannerResolution: CameraLiveScannerResolution;
+    /** @param source {@displayType `DeepPartial<CameraConfiguration>`} */
+    constructor(source?: DeepPartial<CameraConfiguration>);
+}

@@ -1,0 +1,44 @@
+export declare class CameraLocalization {
+    static readonly IOS_BACK_TRIPLE: {
+        de: string;
+        he: string;
+        ar: string;
+        el: string;
+        ja: string;
+        en: string;
+        uk: string;
+        es_419: string;
+        pt_PT: string;
+        es: string;
+        da: string;
+        it: string;
+        sk: string;
+        zh_CN: string;
+        ms: string;
+        sv: string;
+        en_AU: string;
+        cs: string;
+        ko: string;
+        no: string;
+        hu: string;
+        tr: string;
+        pl: string;
+        fr_CA: string;
+        vi: string;
+        ru: string;
+        en_GB: string;
+        fr: string;
+        fi: string;
+        id: string;
+        nl: string;
+        th: string;
+        pt: string;
+        ro: string;
+        zh_HK: string;
+        hr: string;
+        hi: string;
+        ca: string;
+        zh_TW: string;
+    };
+    static isiOSBackTripleCamera(cameraName: string): boolean;
+}

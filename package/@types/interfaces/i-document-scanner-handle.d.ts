@@ -1,0 +1,11 @@
+import { DeepPartial } from "../core-types";
+import { DocumentScannerViewConfiguration } from "../model/configuration/document-scanner-view-configuration";
+import { IScannerCommon } from "./base/i-scanner-common-handle";
+import { DocumentScannerScanResponse } from "../core-types";
+export interface IDocumentScannerHandle extends IScannerCommon {
+    detectAndCrop(): Promise<DocumentScannerScanResponse | null>;
+    enableAutoCapture(): void;
+    disableAutoCapture(): void;
+    isAutoCaptureEnabled(): boolean;
+    updateConfiguration(config: DeepPartial<DocumentScannerViewConfiguration>): void;
+}

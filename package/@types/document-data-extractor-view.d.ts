@@ -1,0 +1,25 @@
+import React from "react";
+import { ScanbotCameraProps, ScanbotCameraState } from "./scanner-view";
+import { IDocumentDataExtractorHandle } from "./interfaces/i-document-data-extractor-handle";
+import { DocumentDataExtractorViewConfiguration } from "./model/configuration/document-data-extractor-view-configuration";
+import type ScanbotSDK from "./scanbot-sdk";
+import { type DeepPartial } from "./core-types";
+import FinderScannerView from "./finder-scanner-view";
+declare class DocumentDataExtractorProps extends ScanbotCameraProps {
+    configuration: DocumentDataExtractorViewConfiguration;
+    sdk: ScanbotSDK;
+}
+export default class DocumentDataExtractorView extends FinderScannerView<DocumentDataExtractorProps, ScanbotCameraState> implements IDocumentDataExtractorHandle {
+    private configuration;
+    private handle;
+    constructor(props: DocumentDataExtractorProps);
+    private static root;
+    static create(sdk: ScanbotSDK, configuration: DocumentDataExtractorViewConfiguration): Promise<IDocumentDataExtractorHandle>;
+    updateConfiguration(configuration: DeepPartial<DocumentDataExtractorViewConfiguration>): void;
+    componentWillUnmount(): Promise<void>;
+    get enabled(): boolean;
+    onSdkReady(): Promise<void>;
+    detect(): Promise<void>;
+    render(): React.ReactNode;
+}
+export {};

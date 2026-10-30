@@ -1,0 +1,34 @@
+import type { DocumentCropOptimization } from "../ImageProcessorTypes";
+import type { ImageRotation } from "../ImageTypes";
+import type { Image } from "../bridge/image";
+import type { ParametricFilter } from "../ParametricFilters";
+import type { Point } from "../utils";
+import { ObjectId } from "../utils";
+/**
+   This class is used inside the JS Worker and interacts directly with the WASM.
+*/
+export declare class WorkerImageProcessor {
+    private getWasmModule;
+    private readonly objectMap;
+    constructor(getWasmModule: () => any);
+    create(): Promise<ObjectId<"ImageProcessor">>;
+    crop(instanceId: ObjectId<"ImageProcessor">, image: Image, quad: Point[], documentCropOptimization: DocumentCropOptimization): Promise<{
+        result: Image;
+        originalImage: Image;
+    }>;
+    resize(instanceId: ObjectId<"ImageProcessor">, image: Image, size: number): Promise<{
+        result: Image;
+        originalImage: Image;
+    }>;
+    rotate(instanceId: ObjectId<"ImageProcessor">, image: Image, rotation: ImageRotation): Promise<{
+        result: Image;
+        originalImage: Image;
+    }>;
+    applyFilter(instanceId: ObjectId<"ImageProcessor">, image: Image, filter: ParametricFilter): Promise<{
+        result: Image;
+        originalImage: Image;
+    }>;
+    destroy(instanceId: ObjectId<"ImageProcessor">): Promise<void>;
+    isAvailable(): Promise<boolean>;
+    private getWasmComponent;
+}

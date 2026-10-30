@@ -1,0 +1,24 @@
+import type { DocumentDataExtractionResult } from "../DocumentDataExtractorTypes";
+import type { DocumentDataExtractorConfiguration } from "../DocumentDataExtractorTypes";
+import type { DocumentVerificationReport } from "../DocumentDataExtractorTypes";
+import type { GenericDocument } from "../GenericDocument";
+import type { Image } from "../bridge/image";
+import { ObjectId } from "../utils";
+/**
+   This class is used inside the JS Worker and interacts directly with the WASM.
+*/
+export declare class WorkerDocumentDataExtractor {
+    private getWasmModule;
+    private readonly objectMap;
+    constructor(getWasmModule: () => any);
+    create(configuration: DocumentDataExtractorConfiguration): Promise<ObjectId<"DocumentDataExtractor">>;
+    run(instanceId: ObjectId<"DocumentDataExtractor">, image: Image): Promise<{
+        result: DocumentDataExtractionResult;
+        originalImage: Image;
+    }>;
+    clearResult(instanceId: ObjectId<"DocumentDataExtractor">): Promise<void>;
+    verifyDocument(instanceId: ObjectId<"DocumentDataExtractor">, documentParts: GenericDocument[]): Promise<DocumentVerificationReport>;
+    destroy(instanceId: ObjectId<"DocumentDataExtractor">): Promise<void>;
+    isAvailable(): Promise<boolean>;
+    private getWasmComponent;
+}

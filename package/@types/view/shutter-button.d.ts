@@ -1,0 +1,23 @@
+import React from "react";
+import { CaptureButtonStyleConfiguration } from "../model/configuration/document-scanner-view-configuration";
+export type ShutterButtonAction = "manual" | "searching" | "capturing" | "processing";
+export declare class ShutterButtonProps {
+    style: CaptureButtonStyleConfiguration;
+    action: ShutterButtonAction;
+    onClick: any;
+}
+export declare class ShutterButton extends React.Component<ShutterButtonProps, {}> {
+    private inner1;
+    private inner2;
+    render(): React.JSX.Element;
+    updateAnimationSpeed(action: ShutterButtonAction): void;
+    componentDidMount(): void;
+    componentDidUpdate(): void;
+    captureBackground(): React.JSX.Element;
+    captureInnerCircle(): React.JSX.Element;
+    captureSearchingInner1(): React.JSX.Element;
+    captureSearchingInner2(): React.JSX.Element;
+    get color(): string;
+    path(definition: string): React.JSX.Element;
+    svgBase(style: React.CSSProperties, child: any, ref?: (ref: any) => void): React.JSX.Element;
+}

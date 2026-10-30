@@ -1,0 +1,44 @@
+import { SelectionOverlayConfiguration } from "./selection-overlay-configuration";
+import { ViewFinderScannerConfiguration } from "./view-finder-scanner-configuration";
+import { BarcodeScannerConfiguration, type DeepPartial, Image } from "../../core-types";
+import type { BarcodeScannerResultWithSize } from "../barcode/barcode-result";
+export declare class BarcodeScannerViewConfiguration extends ViewFinderScannerConfiguration {
+    constructor();
+    /**
+     * Determines whether the scanner should use the 4K video stream. This will enhance the recognition quality,
+     * but will also increase the CPU load and memory consumption.Should be enabled on devices that can handle the increased load.
+     * If the device does not support 4K, it will fall back to the highest available resolution.
+     * This setting overrides videoConstraints width and height settings.
+     * Defaults to false
+     */
+    enable4kStream?: boolean;
+    /**
+     * Capture delay in milliseconds after detecting barcodes. Defaults to 1000
+     */
+    captureDelay?: number;
+    overlay?: SelectionOverlayConfiguration;
+    /** {@displayType `Omit<DeepPartial<BarcodeScannerConfiguration>, "live">`} {@link BarcodeScannerConfiguration}*/
+    scannerConfiguration?: DeepPartial<BarcodeScannerConfiguration>;
+    /**
+     */
+    onBarcodesDetected?: (e: BarcodeScannerResultWithSize) => void;
+    /**
+     * Note that the Image is only available at the point in time when _onDetectionFailed is invoked.
+     * The underlying buffer will be reused in the next detection cycle and will not be available anymore.
+     * @internal
+     * */
+    _onDetectionFailed?: (image: Image) => void;
+    /**
+     * If set, limit the resolution of the image that is used for barcode recognition.
+     * A lower value will result in faster processing times but may reduce recognition quality.
+     */
+    desiredRecognitionResolution?: number;
+    /**
+     * The rate of detections/recognitions per second in normal performance mode.
+     * If the number is equal or greater than the video frame rate, no frames will be skipped.
+     * A lower value will result in improved overall performance on lower-end devices, but may reduce recognition speed.
+     * In seconds. Defaults to 60.
+     */
+    fpsLimit?: number;
+    static fromJson(json: any): BarcodeScannerViewConfiguration;
+}

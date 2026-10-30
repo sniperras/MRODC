@@ -1,0 +1,208 @@
+import type { DeepPartial } from "../utils";
+/**
+Configuration of the all strings for check scanner screen.
+*/
+export declare class CheckScannerScreenTextLocalization {
+    /**
+      Title for the top bar.
+      @defaultValue "Check Scanner";
+      */
+    topBarTitle: string;
+    /**
+      Cancel button text for the top bar.
+      @defaultValue "Cancel";
+      */
+    topBarCancelButton: string;
+    /**
+      Text for the top user guidance caption.
+      @defaultValue "Point the camera at the check";
+      */
+    topUserGuidance: string;
+    /**
+      Text for the user guidance caption below the finder view.
+      @defaultValue "Looking for check...";
+      */
+    finderViewUserGuidance: string;
+    /**
+      Title for the introduction screen.
+      @defaultValue "How to scan a check";
+      */
+    introScreenTitle: string;
+    /**
+      Start scanning button text for the introduction screen.
+      @defaultValue "Start Scanning";
+      */
+    introScreenDoneButton: string;
+    /**
+      The text explanation of the introduction screen.
+      @defaultValue "This scanner reads the MICR (Magnetic Ink Character Recognition) line – the numbers and characters printed at the bottom of your check.\n\nTo scan, place the check on a flat, well-lit surface and position your camera so the entire check is within the frame. The check data will be automatically extracted.\nTap 'Start Scanning' to begin.";
+      */
+    introScreenText: string;
+    /**
+      Caption for the success overlay.
+      @defaultValue "Scanned successfully";
+      */
+    completionOverlaySuccessMessage: string;
+    /**
+      Accessibility description for the 'open introduction screen' button in top bar.
+      @defaultValue "Open Check Scanner introduction";
+      */
+    accessibilityDescriptionOpenIntroScreenButton: string;
+    /**
+      Accessibility description for the 'done'/'start scanning' button in the introduction screen.
+      @defaultValue "Start check scanning";
+      */
+    accessibilityDescriptionIntroScreenDoneButton: string;
+    /**
+      Accessibility description for the 'cancel' button in the top bar.
+      @defaultValue "Cancel check scanning";
+      */
+    accessibilityDescriptionCancelButton: string;
+    /**
+      Accessibility description for the 'retry' button in the alerts.
+      @defaultValue "Retry check scanning";
+      */
+    accessibilityDescriptionRetryButton: string;
+    /**
+      Accessibility description for the 'close scanner' button in the alerts.
+      @defaultValue "Close check scanner";
+      */
+    accessibilityDescriptionCloseScannerButton: string;
+    /**
+      Try again button text for the alert.
+      @defaultValue "Retry";
+      */
+    checkAlertRetryButton: string;
+    /**
+      Close button text for the alert.
+      @defaultValue "Close Scanner";
+      */
+    checkAlertCloseScannerButton: string;
+    /**
+      Title for the alert when Check is not detected.
+      @defaultValue "No check detected";
+      */
+    checkNoCheckDetectedAlertTitle: string;
+    /**
+      Subtitle for the alert when Check is not detected.
+      @defaultValue "The scanner couldn't detect the check. Please ensure the check is valid, well-lit, and fully visible, then try again.";
+      */
+    checkNoCheckDetectedAlertSubtitle: string;
+    /**
+      Title for the alert when the image is not good.
+      @defaultValue "Check not recognized";
+      */
+    checkImageNotGoodAlertTitle: string;
+    /**
+      Subtitle for the alert when the image is not good.
+      @defaultValue "Make sure the check is valid, well-lit, and fully visible. Then try again.";
+      */
+    checkImageNotGoodAlertSubtitle: string;
+    /**
+      Accessibility description for the flash button.
+      @defaultValue "Toggle flash";
+      */
+    accessibilityDescriptionFlashButton: string;
+    /**
+      Accessibility value for the flash on button.
+      @defaultValue "On";
+      */
+    accessibilityStateFlashOnButton: string;
+    /**
+      Accessibility value for the flash off button.
+      @defaultValue "Off";
+      */
+    accessibilityStateFlashOffButton: string;
+    /**
+      Accessibility description for the zoom button.
+      @defaultValue "Toggle camera zoom";
+      */
+    accessibilityDescriptionZoomButton: string;
+    /**
+      Accessibility description for the flip camera button.
+      @defaultValue "Flip camera";
+      */
+    accessibilityDescriptionFlipCameraButton: string;
+    /**
+      Accessibility value for the flip camera back button.
+      @defaultValue "Back";
+      */
+    accessibilityStateFlipCameraBackButton: string;
+    /**
+      Accessibility value for the flip camera front button.
+      @defaultValue "Front";
+      */
+    accessibilityStateFlipCameraFrontButton: string;
+    /**
+      The title of the camera permission dialog.
+      @defaultValue "Camera permission denied!";
+      */
+    cameraPermissionEnableCameraTitle: string;
+    /**
+      The explanation text of the camera permission dialog.
+      @defaultValue "Please allow the usage of the camera to start the scanning process.";
+      */
+    cameraPermissionEnableCameraExplanation: string;
+    /**
+      The 'enable' button title of the camera permission dialog.
+      @defaultValue "Grant permission";
+      */
+    cameraPermissionEnableCameraButton: string;
+    /**
+      The 'close' button title of the camera permission dialog.
+      @defaultValue "Close";
+      */
+    cameraPermissionCloseButton: string;
+    /**
+      The accessibility hint for the 'enable' button of the camera permission dialog.
+      @defaultValue "Tap to grant camera permission";
+      */
+    accessibilityDescriptionCameraPermissionEnableCameraButton: string;
+    /**
+      The accessibility hint for the 'close' button of the camera permission dialog.
+      @defaultValue "Close screen without granting permission";
+      */
+    accessibilityDescriptionCameraPermissionCloseButton: string;
+    /**
+      The user guidance text displayed when no check is found.
+      @defaultValue "Looking for check...";
+      */
+    checkUserGuidanceNoCheckFound: string;
+    /**
+      The user guidance text displayed when a check presence was detected.
+      @defaultValue "Scanning the check...";
+      */
+    checkUserGuidanceScanningProgress: string;
+    /**
+      The user guidance text displayed when it is too dark to capture an adequate image.
+      @defaultValue "Too dark. Please turn on a light.";
+      */
+    checkUserGuidanceTooDark: string;
+    /**
+      The user guidance text displayed when the detected check is too far away and appears too small.
+      @defaultValue "Please move closer to the check.";
+      */
+    checkUserGuidanceTooSmall: string;
+    /**
+      The user guidance text displayed when the detected check is not in a good perspective (device tilted).
+      @defaultValue "Please hold your device straight over the check.";
+      */
+    checkUserGuidanceBadPerspective: string;
+    /**
+      The accessibility hint for the 'select camera' button, located in the top bar of the camera screen.
+      @defaultValue "Tap to open camera selection menu";
+      */
+    accessibilityDescriptionCameraSelectButton: string;
+    /**
+      The accessibility hint for the 'select camera' menu item, accessed via the top bar button on the camera screen.
+      @defaultValue "Tap to select camera";
+      */
+    accessibilityDescriptionCameraSelectMenuItem: string;
+    /**
+      The title of the camera selection menu.
+      @defaultValue "Select camera";
+      */
+    cameraSelectCameraMenuTitle: string;
+    /** @param source {@displayType `DeepPartial<CheckScannerScreenTextLocalization>`} */
+    constructor(source?: DeepPartial<CheckScannerScreenTextLocalization>);
+}
