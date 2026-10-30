@@ -1,7 +1,4 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
 require_once 'includes/db.php';
 $conn = getConnection();
 $activeForm = getActiveForm($conn);
@@ -9,36 +6,82 @@ $activeForm = getActiveForm($conn);
 $success = '';
 $error = '';
 
-if (!$activeForm) {
-    // No active form — show message
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
-    $employeeId  = trim($_POST['employee_id'] ?? '');
-    $fanNo       = preg_replace('/\D/', '', $_POST['fan_no'] ?? '');
-    $tinNo       = trim($_POST['tin_no'] ?? '');
-    $mothersName = trim($_POST['mothers_name'] ?? '');
+    $employeeId = trim($_POST['employee_id'] ?? '');
+    $emp = getEmployeeById($conn, $employeeId);
 
-    if ($employeeId === '' || $fanNo === '' || $mothersName === '') {
-        $error = 'Please fill in all required fields.';
-    } elseif (strlen($fanNo) !== 16) {
-        $error = 'FAYDA No (FAN No) must be exactly 16 digits.';
+    if (!$emp) {
+        $error = 'Employee ID not found. Please verify your ID.';
     } else {
-        $emp = getEmployeeById($conn, $employeeId);
-        if (!$emp) {
-            $error = 'Employee ID not found. Please verify your ID.';
+        $table  = $activeForm['table_name'];
+        $config = json_decode($activeForm['fields_config'] ?? '{}', true);
+
+        // Build value map from POST. Uppercase any text/email field that contains letters.
+        $values = [];
+        foreach ($config as $key => $meta) {
+            $raw = trim($_POST[$key] ?? '');
+            $type = $meta['type'] ?? 'text';
+            if (($type === 'text' || $type === 'email') && preg_match('/[A-Za-z]/', $raw)) {
+                $raw = mb_strtoupper($raw, 'UTF-8');
+            }
+            $values[$key] = $raw;
+        }
+
+        // --- Validation ---
+        if ($employeeId === '') {
+            $error = 'Employee ID is required.';
+        } elseif (isset($config['fan_no']) && !preg_match('/^\d{16}$/', $values['fan_no'])) {
+            $error = 'FAYDA No (FAN No) must be exactly 16 digits.';
         } else {
-            $table = $activeForm['table_name'];
-            // Check duplicate
-            $check = $conn->prepare("SELECT id FROM `$table` WHERE employee_id = ?");
+            // --- Upsert: UPDATE if employee already submitted, else INSERT ---
+            $check = $conn->prepare("SELECT id FROM `$table` WHERE employee_id = ? LIMIT 1");
             $check->bind_param("s", $employeeId);
             $check->execute();
-            if ($check->get_result()->fetch_assoc()) {
-                $error = 'You have already submitted this form.';
+            $existingId = $check->get_result()->fetch_assoc()['id'] ?? null;
+            $check->close();
+
+            $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+
+            if ($existingId) {
+                // Build UPDATE
+                $setParts  = [];
+                $bindTypes = '';
+                $bindVals  = [];
+                foreach ($values as $k => $v) {
+                    if ($k === 'employee_id') continue;
+                    $setParts[]  = "`$k` = ?";
+                    $bindTypes  .= 's';
+                    $bindVals[]  = $v;
+                }
+                $setParts[]  = "`updated_at` = NOW()";
+                $setParts[]  = "`ip_address` = ?";
+                $bindTypes  .= 's';
+                $bindVals[]  = $ip;
+                $bindTypes  .= 'i';
+                $bindVals[]  = $existingId;
+
+                $sql = "UPDATE `$table` SET " . implode(', ', $setParts) . " WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param($bindTypes, ...$bindVals);
+                if ($stmt->execute()) {
+                    $success = 'Your information has been updated successfully.';
+                } else {
+                    $error = 'Update failed. Please try again.';
+                }
+                $stmt->close();
             } else {
-                $stmt = $conn->prepare("INSERT INTO `$table` (employee_id, fan_no, tin_no, mothers_name, ip_address) VALUES (?, ?, ?, ?, ?)");
-                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-                $stmt->bind_param("sssss", $employeeId, $fanNo, $tinNo, $mothersName, $ip);
+                // Build INSERT
+                $cols = array_keys($values);
+                $cols[] = 'ip_address';
+                $placeholders = implode(',', array_fill(0, count($cols), '?'));
+                $colList      = implode(',', array_map(fn($c) => "`$c`", $cols));
+                $sql          = "INSERT INTO `$table` ($colList) VALUES ($placeholders)";
+                $bindTypes    = str_repeat('s', count($cols));
+                $bindVals     = array_values($values);
+                $bindVals[]   = $ip;
+
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param($bindTypes, ...$bindVals);
                 if ($stmt->execute()) {
                     $success = 'Your information has been submitted successfully!';
                 } else {
@@ -46,10 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
                 }
                 $stmt->close();
             }
-            $check->close();
         }
     }
 }
+
+$fieldsConfig = $activeForm ? json_decode($activeForm['fields_config'] ?? '{}', true) : [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -66,7 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
             box-sizing: border-box;
         }
 
-        /* ==== YOUR REQUESTED BACKGROUND ==== */
         body {
             font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
@@ -86,8 +129,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
             background: linear-gradient(135deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.1) 100%);
             pointer-events: none;
         }
-
-        /* ==== END BACKGROUND ==== */
 
         .form-container {
             position: relative;
@@ -252,6 +293,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
                 transform: translateY(0);
             }
         }
+
+        /* Wide-and-short scan modal for 1D barcodes */
+        #scanModal .modal-card {
+            background: #fff;
+            border-radius: 1rem;
+            padding: 1rem;
+            max-width: 640px;
+            width: 92%;
+        }
+
+        #qrReader {
+            width: 100% !important;
+            min-height: 220px;
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+
+        #qrReader video {
+            width: 100% !important;
+            height: auto !important;
+            border-radius: 0.75rem;
+        }
     </style>
     <!-- Barcode/QR scanner library -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -279,52 +342,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
                     <?php endif; ?>
 
                     <form method="POST" id="infoForm" <?= $success ? 'style="display:none"' : '' ?>>
-                        <!-- Employee ID -->
-                        <div class="form-group">
-                            <label for="employee_id">Employee ID <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="employee_id" name="employee_id" required
-                                placeholder="e.g. 9965" autocomplete="off"
-                                onblur="lookupEmployee(this.value)">
-                            <div class="hint" id="empHint"></div>
-                        </div>
-
-                        <!-- Employee Name (auto-filled, readonly) -->
-                        <div class="form-group">
-                            <label for="employee_name">Name of Employee</label>
-                            <input type="text" id="employee_name" name="employee_name" readonly
-                                placeholder="Auto-filled from Employee ID">
-                        </div>
-
-                        <!-- FAN No with manual OR scan -->
-                        <div class="form-group">
-                            <label for="fan_no">FAYDA No (FAN No) <span style="color:#dc2626">*</span></label>
-                            <div class="input-row">
-                                <input type="text" id="fan_no" name="fan_no" required maxlength="16"
-                                    pattern="\d{16}" inputmode="numeric"
-                                    placeholder="16-digit FAN number" autocomplete="off">
-                                <?php
-                                $fieldsConfig = json_decode($activeForm['fields_config'] ?? '{}', true);
-                                $scanEnabled = !empty($fieldsConfig['fan_no']['scan_enabled']);
-                                ?>
-                                <?php if ($scanEnabled): ?>
-                                    <button type="button" class="btn-scan" onclick="startScan()">📷 Scan</button>
+                        <?php foreach ($fieldsConfig as $key => $meta):
+                            $label    = htmlspecialchars($meta['label'] ?? $key);
+                            $type     = $meta['type'] ?? 'text';
+                            $required = !empty($meta['required']);
+                            $scan     = !empty($meta['scan_enabled']);
+                            $autoUpper = ($type === 'text' && !in_array($key, ['fan_no', 'tin_no', 'employee_id'], true));
+                        ?>
+                            <div class="form-group">
+                                <label for="<?= $key ?>"><?= $label ?> <?php if ($required): ?><span style="color:#dc2626">*</span><?php endif; ?></label>
+                                <div class="input-row">
+                                    <input type="<?= $type ?>"
+                                        id="<?= $key ?>" name="<?= $key ?>"
+                                        <?= $required ? 'required' : '' ?>
+                                        <?= ($type === 'text' && $key === 'fan_no') ? 'maxlength="16" pattern="\d{16}" inputmode="numeric"' : '' ?>
+                                        <?= $autoUpper ? 'data-upper' : '' ?>
+                                        autocomplete="off">
+                                    <?php if ($scan): ?>
+                                        <button type="button" class="btn-scan" onclick="startScan('<?= $key ?>')">📷 Scan</button>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($key === 'fan_no'): ?>
+                                    <div class="hint">Must be exactly 16 digits.</div>
                                 <?php endif; ?>
                             </div>
-                            <div class="hint">Must be exactly 16 digits.</div>
-                        </div>
-
-                        <!-- TIN No -->
-                        <div class="form-group">
-                            <label for="tin_no">TIN No</label>
-                            <input type="text" id="tin_no" name="tin_no" placeholder="Enter TIN number" autocomplete="off">
-                        </div>
-
-                        <!-- Mother's Name -->
-                        <div class="form-group">
-                            <label for="mothers_name">Mother's Name <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="mothers_name" name="mothers_name" required
-                                placeholder="Enter your mother's full name" autocomplete="off">
-                        </div>
+                        <?php endforeach; ?>
 
                         <button type="submit" class="btn-signin">Submit Information</button>
                     </form>
@@ -333,19 +375,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
         </div>
     </div>
 
-    <!-- Scan modal -->
+    <!-- Scan modal — wide & short for 1D barcodes -->
     <div id="scanModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center;">
-        <div style="background:#fff; border-radius:1rem; padding:1rem; max-width:400px; width:90%;">
+        <div class="modal-card">
             <div id="qrReader"></div>
             <button onclick="stopScan()" style="width:100%; margin-top:0.75rem; padding:0.6rem; border:none; border-radius:0.5rem; background:#dc2626; color:#fff; font-weight:600; cursor:pointer;">Close</button>
         </div>
     </div>
 
+    <script src="assets/js/scanner.js"></script>
     <script>
         // Employee lookup (AJAX)
         function lookupEmployee(id) {
             const hint = document.getElementById('empHint');
             const nameField = document.getElementById('employee_name');
+            if (!hint || !nameField) return;
             if (!id) {
                 nameField.value = '';
                 hint.textContent = '';
@@ -368,49 +412,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
                     hint.textContent = 'Lookup failed';
                 });
         }
-
-        // Barcode / QR scanning
-        let html5QrCode = null;
-
-        function startScan() {
-            document.getElementById('scanModal').style.display = 'flex';
-            html5QrCode = new Html5Qrcode("qrReader");
-            html5QrCode.start({
-                    facingMode: "environment"
-                }, {
-                    fps: 10,
-                    qrbox: {
-                        width: 250,
-                        height: 250
-                    }
-                },
-                (decodedText) => {
-                    // Extract 16-digit number
-                    const match = decodedText.match(/\d{16}/);
-                    if (match) {
-                        document.getElementById('fan_no').value = match[0];
-                        stopScan();
-                    }
-                },
-                () => {}
-            ).catch(err => {
-                alert('Camera error: ' + err);
-                stopScan();
-            });
-        }
-
-        function stopScan() {
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => {});
-                html5QrCode = null;
-            }
-            document.getElementById('scanModal').style.display = 'none';
-        }
-
-        // Enforce numeric-only FAN input
-        document.getElementById('fan_no')?.addEventListener('input', function() {
-            this.value = this.value.replace(/\D/g, '').slice(0, 16);
-        });
     </script>
 </body>
 
