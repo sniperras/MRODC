@@ -16,10 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
         $table  = $activeForm['table_name'];
         $config = json_decode($activeForm['fields_config'] ?? '{}', true);
 
-        // Build value map from POST. Uppercase any text/email field that contains letters.
+        // Build value map from POST. Auto-filled fields come from the employee record.
         $values = [];
         foreach ($config as $key => $meta) {
-            $raw = trim($_POST[$key] ?? '');
+            if (!empty($meta['auto_from'])) {
+                $values[$key] = $emp[$meta['auto_from']] ?? '';
+                continue;
+            }
+            $raw  = trim($_POST[$key] ?? '');
             $type = $meta['type'] ?? 'text';
             if (($type === 'text' || $type === 'email') && preg_match('/[A-Za-z]/', $raw)) {
                 $raw = mb_strtoupper($raw, 'UTF-8');
@@ -33,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
         } elseif (isset($config['fan_no']) && !preg_match('/^\d{16}$/', $values['fan_no'])) {
             $error = 'FAYDA No (FAN No) must be exactly 16 digits.';
         } else {
-            // --- Upsert: UPDATE if employee already submitted, else INSERT ---
+            // --- Upsert ---
             $check = $conn->prepare("SELECT id FROM `$table` WHERE employee_id = ? LIMIT 1");
             $check->bind_param("s", $employeeId);
             $check->execute();
@@ -43,7 +47,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
             $ip = $_SERVER['REMOTE_ADDR'] ?? '';
 
             if ($existingId) {
-                // Build UPDATE
                 $setParts  = [];
                 $bindTypes = '';
                 $bindVals  = [];
@@ -60,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
                 $bindTypes  .= 'i';
                 $bindVals[]  = $existingId;
 
-                $sql = "UPDATE `$table` SET " . implode(', ', $setParts) . " WHERE id = ?";
+                $sql  = "UPDATE `$table` SET " . implode(', ', $setParts) . " WHERE id = ?";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param($bindTypes, ...$bindVals);
                 if ($stmt->execute()) {
@@ -70,9 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $activeForm) {
                 }
                 $stmt->close();
             } else {
-                // Build INSERT
-                $cols = array_keys($values);
-                $cols[] = 'ip_address';
+                $cols         = array_keys($values);
+                $cols[]       = 'ip_address';
                 $placeholders = implode(',', array_fill(0, count($cols), '?'));
                 $colList      = implode(',', array_map(fn($c) => "`$c`", $cols));
                 $sql          = "INSERT INTO `$table` ($colList) VALUES ($placeholders)";
@@ -142,7 +144,7 @@ $fieldsConfig = $activeForm ? json_decode($activeForm['fields_config'] ?? '{}', 
             background: #fff;
             border-radius: 1.4rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.2), 0px 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             animation: fadeInUp 0.5s ease-out;
         }
@@ -293,31 +295,68 @@ $fieldsConfig = $activeForm ? json_decode($activeForm['fields_config'] ?? '{}', 
                 transform: translateY(0);
             }
         }
-
-        /* Wide-and-short scan modal for 1D barcodes */
-        #scanModal .modal-card {
-            background: #fff;
-            border-radius: 1rem;
-            padding: 1rem;
-            max-width: 640px;
-            width: 92%;
-        }
-
-        #qrReader {
-            width: 100% !important;
-            min-height: 220px;
-            border-radius: 0.75rem;
-            overflow: hidden;
-        }
-
-        #qrReader video {
-            width: 100% !important;
-            height: auto !important;
-            border-radius: 0.75rem;
-        }
     </style>
-    <!-- Barcode/QR scanner library -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <!--
+        Scanbot SDK.
+        Loaded as an ES module from the CDN. It creates the global
+        `ScanbotSDK` and lets us call `ScanbotSDK.initialize()` once.
+        `enginePath` points to the local /assets/wasm/ folder where we
+        copied the WASM binaries. The main UI script itself is still
+        fetched from the CDN, but that's fine — the worker will now
+        load the WASM from your own origin, so no CDN call is made
+        from inside the worker.
+    -->
+    <script type="module">
+        import "https://cdn.jsdelivr.net/npm/scanbot-web-sdk@10.0.0/bundle/ScanbotSDK.ui2.min.js";
+
+        let scanbotReady = false;
+
+        async function initScanbot() {
+            if (scanbotReady) return;
+            await ScanbotSDK.initialize({
+                enginePath: "/assets/wasm/", // local, not CDN
+                licenseKey: "" // trial mode
+            });
+            scanbotReady = true;
+            console.log('Scanbot SDK initialized');
+        }
+
+        // Expose startScan globally so the inline onclick handler works.
+        window.startScan = async function(fieldName) {
+            try {
+                await initScanbot();
+
+                const config = new ScanbotSDK.UI.Config.BarcodeScannerScreenConfiguration();
+                // Optional: restrict to Code 128 for faster FAN scanning
+                // config.scannerConfiguration.barcodeFormats = ["CODE_128"];
+
+                const result = await ScanbotSDK.UI.createBarcodeScanner(config);
+
+                if (!result || !result.items || result.items.length === 0) return;
+
+                const code = result.items[0].barcode.text;
+                const input = document.querySelector(`[name="${fieldName}"]`);
+                if (input) {
+                    input.value = code;
+                    if (input.hasAttribute('data-upper')) {
+                        input.value = input.value.toUpperCase();
+                    }
+                }
+                console.log('Scanned:', code);
+            } catch (err) {
+                console.error('Scanbot error:', err);
+                alert('Scanner error: ' + (err.message || err));
+            }
+        };
+
+        // Keep stopScan as a no-op for compatibility with the Close button (if any)
+        window.stopScan = function() {
+            const modal = document.getElementById('scanModal');
+            if (modal) modal.classList.remove('active');
+            document.body.classList.remove('modal-open');
+        };
+    </script>
 </head>
 
 <body>
@@ -343,27 +382,42 @@ $fieldsConfig = $activeForm ? json_decode($activeForm['fields_config'] ?? '{}', 
 
                     <form method="POST" id="infoForm" <?= $success ? 'style="display:none"' : '' ?>>
                         <?php foreach ($fieldsConfig as $key => $meta):
-                            $label    = htmlspecialchars($meta['label'] ?? $key);
-                            $type     = $meta['type'] ?? 'text';
-                            $required = !empty($meta['required']);
-                            $scan     = !empty($meta['scan_enabled']);
-                            $autoUpper = ($type === 'text' && !in_array($key, ['fan_no', 'tin_no', 'employee_id'], true));
+                            $label     = htmlspecialchars($meta['label'] ?? $key);
+                            $type      = $meta['type'] ?? 'text';
+                            $required  = !empty($meta['required']);
+                            $scan      = !empty($meta['scan_enabled']);
+                            $autoFrom  = $meta['auto_from'] ?? null;
+                            $isAuto    = !empty($autoFrom);
+                            $autoUpper = ($type === 'text' && !$isAuto && !in_array($key, ['fan_no', 'tin_no', 'employee_id'], true));
                         ?>
                             <div class="form-group">
-                                <label for="<?= $key ?>"><?= $label ?> <?php if ($required): ?><span style="color:#dc2626">*</span><?php endif; ?></label>
+                                <label for="<?= $key ?>">
+                                    <?= $label ?> <?php if ($required): ?><span style="color:#dc2626">*</span><?php endif; ?>
+                                </label>
                                 <div class="input-row">
-                                    <input type="<?= $type ?>"
+                                    <input type="<?= htmlspecialchars($type) ?>"
                                         id="<?= $key ?>" name="<?= $key ?>"
                                         <?= $required ? 'required' : '' ?>
-                                        <?= ($type === 'text' && $key === 'fan_no') ? 'maxlength="16" pattern="\d{16}" inputmode="numeric"' : '' ?>
+                                        <?= ($key === 'fan_no') ? 'maxlength="16" pattern="\d{16}" inputmode="numeric"' : '' ?>
                                         <?= $autoUpper ? 'data-upper' : '' ?>
-                                        autocomplete="off">
+                                        <?= $isAuto ? 'readonly' : '' ?>
+                                        <?php if ($key === 'employee_id'): ?>
+                                        autocomplete="off" onblur="lookupEmployee(this.value)"
+                                        <?php else: ?>
+                                        autocomplete="off"
+                                        <?php endif; ?>
+                                        value="<?= htmlspecialchars($_POST[$key] ?? '') ?>">
                                     <?php if ($scan): ?>
                                         <button type="button" class="btn-scan" onclick="startScan('<?= $key ?>')">📷 Scan</button>
                                     <?php endif; ?>
                                 </div>
-                                <?php if ($key === 'fan_no'): ?>
+
+                                <?php if ($key === 'employee_id'): ?>
+                                    <div class="hint" id="empHint"></div>
+                                <?php elseif ($key === 'fan_no'): ?>
                                     <div class="hint">Must be exactly 16 digits.</div>
+                                <?php elseif ($isAuto): ?>
+                                    <div class="hint">Auto-filled from employee record.</div>
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
@@ -375,43 +429,70 @@ $fieldsConfig = $activeForm ? json_decode($activeForm['fields_config'] ?? '{}', 
         </div>
     </div>
 
-    <!-- Scan modal — wide & short for 1D barcodes -->
-    <div id="scanModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center;">
-        <div class="modal-card">
-            <div id="qrReader"></div>
-            <button onclick="stopScan()" style="width:100%; margin-top:0.75rem; padding:0.6rem; border:none; border-radius:0.5rem; background:#dc2626; color:#fff; font-weight:600; cursor:pointer;">Close</button>
-        </div>
-    </div>
+    <!--
+        The Scanbot SDK renders its own full-screen UI, so this modal is
+        only kept for the stopScan() no-op to find it. It is never shown.
+    -->
+    <div id="scanModal" style="display:none;"></div>
 
-    <script src="assets/js/scanner.js"></script>
+    <!--
+        IMPORTANT:
+        Do NOT load assets/js/scanner.js here anymore. The Scanbot logic
+        is inline in <head> above. Loading scanner.js again would
+        re-declare window.startScan and use the old CDN enginePath,
+        which is what caused the CSP error.
+    -->
+
     <script>
-        // Employee lookup (AJAX)
+        // ---- Employee lookup (AJAX) ----
         function lookupEmployee(id) {
             const hint = document.getElementById('empHint');
-            const nameField = document.getElementById('employee_name');
-            if (!hint || !nameField) return;
+            id = (id || '').trim();
+            if (!hint) return;
+
             if (!id) {
-                nameField.value = '';
+                clearAutoFields();
                 hint.textContent = '';
                 return;
             }
+
             fetch('api/lookup_employee.php?id=' + encodeURIComponent(id))
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        nameField.value = data.full_name;
-                        hint.textContent = '✓ ' + data.department + ' — ' + data.position;
-                        hint.style.color = '#059669';
-                    } else {
-                        nameField.value = '';
+                    if (!data.success) {
+                        clearAutoFields();
                         hint.textContent = '✗ Employee ID not found';
                         hint.style.color = '#dc2626';
+                        return;
                     }
+                    const map = {
+                        full_name: data.full_name,
+                        department: data.department,
+                        position: data.position,
+                        cost_center: data.cost_center,
+                        email: data.email
+                    };
+                    for (const [name, val] of Object.entries(map)) {
+                        const el = document.querySelector(`[name="${name}"]`);
+                        if (el && el.readOnly) el.value = val ?? '';
+                    }
+                    hint.textContent = '✓ ' + (data.department || '') + ' — ' + (data.position || '');
+                    hint.style.color = '#059669';
                 })
                 .catch(() => {
                     hint.textContent = 'Lookup failed';
+                    hint.style.color = '#dc2626';
                 });
         }
+
+        function clearAutoFields() {
+            document.querySelectorAll('input[readonly]').forEach(el => el.value = '');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const empField = document.getElementById('employee_id');
+            if (empField && empField.value.trim()) lookupEmployee(empField.value);
+        });
     </script>
 </body>
 

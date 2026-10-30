@@ -84,6 +84,8 @@ if (isset($_POST['action'], $_POST['form_id'])) {
 
 <head>
     <meta charset="utf-8">
+
+    <link rel="icon" type="image/x-icon" href="/assets/images/ethiopian_logo.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
