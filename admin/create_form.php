@@ -6,77 +6,99 @@ requireAdmin();
 $error = '';
 $success = '';
 
-// Full catalogue of fields the admin can choose from.
-// 'key'       => column name in the dynamic table
-// 'label'     => what the employee sees
-// 'type'      => html input type
-// 'sql_type'  => MySQL column definition
-// 'required'  => forces NOT NULL + required attribute
-// 'scan'      => whether a scan button can be enabled for this field
 $fieldCatalogue = [
-    'employee_id'  => ['label' => 'Employee ID',   'type' => 'text',    'sql_type' => 'VARCHAR(20)',  'required' => true,  'scan' => true],
-    'fan_no'       => ['label' => 'FAYDA No (FAN No)', 'type' => 'text', 'sql_type' => 'VARCHAR(16)', 'required' => true,  'scan' => true],
-    'tin_no'       => ['label' => 'TIN No',        'type' => 'text',    'sql_type' => 'VARCHAR(30)',  'required' => false, 'scan' => false],
-    'mothers_name' => ['label' => "Mother's Name", 'type' => 'text',    'sql_type' => 'VARCHAR(150)', 'required' => true,  'scan' => false],
-    'fathers_name' => ['label' => "Father's Name", 'type' => 'text',    'sql_type' => 'VARCHAR(150)', 'required' => false, 'scan' => false],
-    'phone'        => ['label' => 'Phone',         'type' => 'tel',     'sql_type' => 'VARCHAR(20)',  'required' => false, 'scan' => false],
-    'email'        => ['label' => 'Email',         'type' => 'email',   'sql_type' => 'VARCHAR(150)', 'required' => false, 'scan' => false],
-    'address'      => ['label' => 'Address',       'type' => 'text',    'sql_type' => 'VARCHAR(255)', 'required' => false, 'scan' => false],
-    'dob'          => ['label' => 'Date of Birth', 'type' => 'date',    'sql_type' => 'DATE',         'required' => false, 'scan' => false],
-    'salary'       => ['label' => 'Salary',        'type' => 'number',  'sql_type' => 'DECIMAL(12,2)', 'required' => false, 'scan' => false],
+    'employee_id'  => ['label' => 'Employee ID',        'type' => 'text',   'sql_type' => 'VARCHAR(20)',  'required' => true,  'scan' => false, 'auto_from' => null],
+    'full_name'    => ['label' => 'Full Name',           'type' => 'text',   'sql_type' => 'VARCHAR(150)', 'required' => true,  'scan' => false, 'auto_from' => 'full_name'],
+    'fan_no'       => ['label' => 'FAYDA No (FAN No)',   'type' => 'text',   'sql_type' => 'VARCHAR(16)',  'required' => true,  'scan' => true,  'auto_from' => null],
+    'tin_no'       => ['label' => 'TIN No',              'type' => 'text',   'sql_type' => 'VARCHAR(30)',  'required' => true, 'scan' => false, 'auto_from' => null],
+    'mothers_name' => ['label' => "Mother's Name",       'type' => 'text',   'sql_type' => 'VARCHAR(150)', 'required' => true,  'scan' => false, 'auto_from' => null],
+    'phone'        => ['label' => 'Phone',               'type' => 'tel',    'sql_type' => 'VARCHAR(20)',  'required' => true, 'scan' => false, 'auto_from' => null],
+    'email'        => ['label' => 'Email',               'type' => 'email',  'sql_type' => 'VARCHAR(150)', 'required' => true, 'scan' => false, 'auto_from' => null],
+    'address'      => ['label' => 'Address',             'type' => 'text',   'sql_type' => 'VARCHAR(255)', 'required' => true, 'scan' => false, 'auto_from' => null],
+    'dob'          => ['label' => 'Date of Birth',       'type' => 'date',   'sql_type' => 'DATE',         'required' => true, 'scan' => false, 'auto_from' => null],
 ];
+
+// Fields that are ALWAYS on every form and cannot be unchecked by the admin.
+$lockedFields = ['employee_id', 'full_name'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formName = trim($_POST['form_name'] ?? '');
-    $selected = $_POST['fields'] ?? [];               // ['fan_no','tin_no',...]
-    $scanOn   = $_POST['scan'] ?? [];                 // ['fan_no'=>1,...]
+    $selected = $_POST['fields']      ?? [];
+    $scanOn   = $_POST['scan']        ?? [];
+    $custom   = $_POST['custom']      ?? [];
+    $labels   = $_POST['label']       ?? [];
 
     if (!preg_match('/^[a-zA-Z0-9_]{3,50}$/', $formName)) {
         $error = 'Form name must be 3–50 chars, letters/numbers/underscores only.';
     } elseif (empty($selected)) {
         $error = 'Pick at least one field.';
     } else {
-        // employee_id is mandatory in every form (needed for the filled/unfilled joins)
-        if (!in_array('employee_id', $selected, true)) {
-            $selected[] = 'employee_id';
+        // Force the locked fields into the selection
+        foreach ($lockedFields as $lf) {
+            if (!in_array($lf, $selected, true)) $selected[] = $lf;
         }
 
         $conn = getConnection();
         $tableName = 'form_' . strtolower($formName);
 
-        // Duplicate check
         $check = $conn->prepare("SELECT id FROM form_configurations WHERE form_name = ? OR table_name = ?");
         $check->bind_param("ss", $formName, $tableName);
         $check->execute();
         if ($check->get_result()->fetch_assoc()) {
             $error = 'A form with that name already exists.';
         } else {
-            // Build CREATE TABLE from chosen fields
             $cols = [
                 "`id` INT AUTO_INCREMENT PRIMARY KEY",
                 "`employee_id` VARCHAR(20) NOT NULL",
             ];
-            $fieldMeta = [];
+            $fieldMeta = [
+                'employee_id' => [
+                    'label' => $labels['employee_id'] ?? 'Employee ID',
+                    'type'  => 'text',
+                    'required' => true,
+                    'scan_enabled' => !empty($scanOn['employee_id']),
+                    'auto_from' => null,
+                ],
+            ];
+
             foreach ($selected as $key) {
+                if ($key === 'employee_id') continue;
+
+                // Custom field
+                if (strpos($key, 'custom_') === 0 && isset($custom[$key])) {
+                    $c    = $custom[$key];
+                    $col  = preg_replace('/[^a-z0-9_]/', '', strtolower($key));
+                    $lbl  = trim($c['label'] ?? $key);
+                    $typ  = in_array($c['type'] ?? 'text', ['text', 'number', 'date', 'email', 'tel']) ? $c['type'] : 'text';
+                    $req  = !empty($c['required']);
+
+                    $sqlType = $typ === 'number' ? 'DECIMAL(12,2)'
+                        : ($typ === 'date'  ? 'DATE'
+                            : ($typ === 'email' ? 'VARCHAR(150)'
+                                : 'VARCHAR(255)'));
+                    $cols[] = "`$col` $sqlType " . ($req ? 'NOT NULL' : 'NULL');
+                    $fieldMeta[$col] = [
+                        'label' => $lbl,
+                        'type' => $typ,
+                        'required' => $req,
+                        'scan_enabled' => false,
+                        'auto_from' => null,
+                    ];
+                    continue;
+                }
+
+                // Built-in field — SELECTED ⇒ REQUIRED
                 if (!isset($fieldCatalogue[$key])) continue;
                 $meta = $fieldCatalogue[$key];
-                if ($key === 'employee_id') continue; // already added
-                $null = $meta['required'] ? 'NOT NULL' : 'NULL';
-                $cols[] = "`$key` {$meta['sql_type']} $null";
+                $cols[] = "`$key` {$meta['sql_type']} NOT NULL";
                 $fieldMeta[$key] = [
-                    'label'        => $meta['label'],
-                    'type'         => $meta['type'],
-                    'required'     => (bool)$meta['required'],
+                    'label' => $labels[$key] ?? $meta['label'],
+                    'type'  => $meta['type'],
+                    'required' => true,
                     'scan_enabled' => !empty($scanOn[$key]) && $meta['scan'],
+                    'auto_from' => $meta['auto_from'],
                 ];
             }
-            // Always store employee_id meta
-            $fieldMeta = ['employee_id' => [
-                'label' => 'Employee ID',
-                'type' => 'text',
-                'required' => true,
-                'scan_enabled' => !empty($scanOn['employee_id'])
-            ]] + $fieldMeta;
 
             $cols[] = "`submitted_at` DATETIME DEFAULT CURRENT_TIMESTAMP";
             $cols[] = "`updated_at` DATETIME NULL";
@@ -86,15 +108,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sql = "CREATE TABLE `$tableName` (\n    " . implode(",\n    ", $cols) . "\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
             if ($conn->query($sql)) {
-                $fieldsConfig = json_encode($fieldMeta);
-                $stmt = $conn->prepare("INSERT INTO form_configurations 
-                    (form_name, table_name, is_active, fields_config, created_by) 
-                    VALUES (?, ?, 0, ?, ?)");
-                $createdBy = $_SESSION['admin_id'] ?? null;
-                $stmt->bind_param("sssi", $formName, $tableName, $fieldsConfig, $createdBy);
+                // --- Auto-activate if there is no active form yet ---
+                $hasActive = $conn->query("SELECT id FROM form_configurations WHERE is_active = 1 AND archived_at IS NULL LIMIT 1")->fetch_assoc();
+                $newIsActive = $hasActive ? 0 : 1;
 
+                $fieldsConfig = json_encode($fieldMeta);
+                $stmt = $conn->prepare("INSERT INTO form_configurations
+                    (form_name, table_name, is_active, fields_config, created_by)
+                    VALUES (?, ?, ?, ?, ?)");
+                $createdBy = $_SESSION['admin_id'] ?? null;
+                $stmt->bind_param("ssisi", $formName, $tableName, $newIsActive, $fieldsConfig, $createdBy);
                 if ($stmt->execute()) {
-                    $success = "Form '$formName' created (table: $tableName). Activate it from the dashboard.";
+                    if ($newIsActive) {
+                        $success = "Form '$formName' created (table: $tableName) and activated (no other active form existed).";
+                    } else {
+                        $success = "Form '$formName' created (table: $tableName). Activate it from the dashboard.";
+                    }
                 } else {
                     $error = 'Failed to register form configuration.';
                 }
@@ -113,6 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <head>
     <meta charset="utf-8">
+
+    <link rel="icon" type="image/x-icon" href="/assets/images/ethiopian_logo.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Create New Form</title>
     <style>
@@ -134,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 1px solid #334155;
             border-radius: 1rem;
             padding: 2rem;
-            max-width: 640px;
+            max-width: 720px;
             margin: 0 auto;
         }
 
@@ -158,7 +189,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: #cbd5e1;
         }
 
-        input[type="text"] {
+        input[type="text"],
+        input[type="email"],
+        input[type="number"],
+        input[type="date"],
+        select {
             width: 100%;
             padding: 0.65rem 0.85rem;
             font-size: 0.9rem;
@@ -168,7 +203,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 0.5rem;
         }
 
-        input[type="text"]:focus {
+        input:focus,
+        select:focus {
             outline: none;
             border-color: #10b981;
             box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
@@ -225,8 +261,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 100%;
         }
 
+        .btn-mini {
+            background: #475569;
+            color: #fff;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.75rem;
+            border-radius: 0.4rem;
+        }
+
+        .btn-mini:hover {
+            background: #334155;
+        }
+
+        .btn-remove {
+            background: #dc2626;
+        }
+
+        .btn-remove:hover {
+            background: #b91c1c;
+        }
+
         .field-list {
-            margin: 1rem 0 1.5rem;
+            margin: 0.5rem 0 1.5rem;
             border: 1px solid #334155;
             border-radius: 0.75rem;
             overflow: hidden;
@@ -246,8 +302,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-bottom: none;
         }
 
-        .field-row:hover {
-            background: #152033;
+        .field-row.locked {
+            background: #0b1220;
         }
 
         .field-row input[type="checkbox"] {
@@ -267,10 +323,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-left: 0.4rem;
         }
 
-        .field-row .tag.mand {
-            color: #fca5a5;
-        }
-
         .field-row label.scan {
             font-size: 0.72rem;
             color: #94a3b8;
@@ -280,11 +332,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gap: 0.35rem;
         }
 
-        code {
+        .custom-block {
+            border: 1px dashed #334155;
+            border-radius: 0.75rem;
+            padding: 0.9rem;
+            margin-bottom: 0.75rem;
             background: #0f172a;
-            padding: 0.1rem 0.35rem;
-            border-radius: 0.25rem;
-            color: #6ee7b7;
+        }
+
+        .custom-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 0.5rem;
+            align-items: end;
+        }
+
+        .custom-grid label {
+            font-size: 0.72rem;
+        }
+
+        .custom-grid input,
+        .custom-grid select {
+            padding: 0.45rem 0.55rem;
+            font-size: 0.82rem;
+        }
+
+        .checkbox-inline {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            color: #cbd5e1;
+        }
+
+        .checkbox-inline input {
+            accent-color: #10b981;
+            width: 0.9rem;
+            height: 0.9rem;
+        }
+
+        .req-note {
+            font-size: 0.72rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+
+        .req-note strong {
+            color: #fca5a5;
         }
     </style>
 </head>
@@ -292,7 +386,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="card">
         <h1>➕ Create New Form</h1>
-        <p class="sub">Choose which fields the employee form will collect.</p>
+        <p class="sub">Choose which fields the employee form will collect. You can add your own custom fields too.</p>
 
         <?php if ($error): ?><div class="msg msg-error">⚠️ <?= htmlspecialchars($error) ?></div><?php endif; ?>
         <?php if ($success): ?><div class="msg msg-success">✅ <?= htmlspecialchars($success) ?></div><?php endif; ?>
@@ -304,22 +398,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 value="<?= htmlspecialchars($_POST['form_name'] ?? '') ?>">
             <div class="hint">3–50 characters: letters, numbers, underscores.</div>
 
-            <label style="margin-top:1.25rem;">Fields to Collect</label>
+            <label style="margin-top:1.25rem;">Built-in Fields</label>
+            <div class="req-note">Employee ID and Full Name are always included. <strong>Every ticked field is required.</strong></div>
             <div class="field-list">
                 <?php foreach ($fieldCatalogue as $key => $meta):
-                    $isMandatory = $key === 'employee_id' || $meta['required'];
-                    $isChecked   = $isMandatory || in_array($key, $_POST['fields'] ?? [], true);
+                    $isLocked  = in_array($key, $lockedFields, true);
+                    $isChecked = $isLocked || in_array($key, $_POST['fields'] ?? [], true);
                 ?>
-                    <div class="field-row">
+                    <div class="field-row <?= $isLocked ? 'locked' : '' ?>">
                         <input type="checkbox" id="f_<?= $key ?>" name="fields[]" value="<?= $key ?>"
-                            <?= $isChecked ? 'checked' : '' ?>
-                            <?= $key === 'employee_id' ? 'disabled' : '' ?>>
-                        <?php if ($key === 'employee_id'): ?>
-                            <input type="hidden" name="fields[]" value="employee_id">
+                            <?= $isChecked ? 'checked' : '' ?> <?= $isLocked ? 'disabled' : '' ?>>
+                        <?php if ($isLocked): ?>
+                            <input type="hidden" name="fields[]" value="<?= $key ?>">
                         <?php endif; ?>
                         <span class="name">
                             <?= htmlspecialchars($meta['label']) ?>
-                            <?php if ($meta['required']): ?><span class="tag mand">required</span><?php endif; ?>
+                            <?php if ($isLocked): ?>
+                                <span class="tag">always included</span>
+                            <?php elseif ($meta['auto_from']): ?>
+                                <span class="tag">auto-filled from employees</span>
+                            <?php endif; ?>
                         </span>
                         <span>
                             <?php if ($meta['scan']): ?>
@@ -334,10 +432,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endforeach; ?>
             </div>
 
+            <label>Custom Fields (optional)</label>
+            <div id="customContainer">
+                <?php
+                $submittedCustom = $_POST['custom'] ?? [];
+                foreach ($submittedCustom as $ukey => $c): ?>
+                    <div class="custom-block">
+                        <div class="custom-grid">
+                            <div>
+                                <label>Label</label>
+                                <input type="text" name="custom[<?= htmlspecialchars($ukey) ?>][label]"
+                                    value="<?= htmlspecialchars($c['label'] ?? '') ?>" required>
+                            </div>
+                            <div>
+                                <label>Type</label>
+                                <select name="custom[<?= htmlspecialchars($ukey) ?>][type]">
+                                    <?php foreach (['text', 'number', 'date', 'email', 'tel'] as $t): ?>
+                                        <option value="<?= $t ?>" <?= ($c['type'] ?? '') === $t ? 'selected' : '' ?>><?= $t ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Required</label><br>
+                                <label class="checkbox-inline">
+                                    <input type="checkbox" name="custom[<?= htmlspecialchars($ukey) ?>][required]" value="1"
+                                        <?= !empty($c['required']) ? 'checked' : '' ?>> yes
+                                </label>
+                            </div>
+                            <div></div>
+                            <div>
+                                <button type="button" class="btn-mini btn-remove" onclick="this.closest('.custom-block').remove()">✕</button>
+                            </div>
+                        </div>
+                        <input type="hidden" name="fields[]" value="<?= htmlspecialchars($ukey) ?>">
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" class="btn-mini" onclick="addCustom()" style="margin-bottom:1rem;">+ Add Custom Field</button>
+
             <button type="submit" class="btn btn-primary">Create Form</button>
             <a href="adminpage.php" class="btn btn-secondary">← Back to Dashboard</a>
         </form>
     </div>
+
+    <script>
+        let customCounter = <?= count($_POST['custom'] ?? []) ?>;
+
+        function addCustom() {
+            customCounter++;
+            const key = 'custom_' + Date.now() + '_' + customCounter;
+            const div = document.createElement('div');
+            div.className = 'custom-block';
+            div.innerHTML = `
+        <div class="custom-grid">
+            <div>
+                <label>Label</label>
+                <input type="text" name="custom[${key}][label]" placeholder="e.g. Emergency Contact" required>
+            </div>
+            <div>
+                <label>Type</label>
+                <select name="custom[${key}][type]">
+                    <option value="text">text</option>
+                    <option value="number">number</option>
+                    <option value="date">date</option>
+                    <option value="email">email</option>
+                    <option value="tel">tel</option>
+                </select>
+            </div>
+            <div>
+                <label>Required</label><br>
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="custom[${key}][required]" value="1"> yes
+                </label>
+            </div>
+            <div></div>
+            <div>
+                <button type="button" class="btn-mini btn-remove" onclick="this.closest('.custom-block').remove()">✕</button>
+            </div>
+        </div>
+        <input type="hidden" name="fields[]" value="${key}">
+    `;
+            document.getElementById('customContainer').appendChild(div);
+        }
+    </script>
 </body>
 
 </html>

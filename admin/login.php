@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html>
 
 <head>
+
+    <link rel="icon" type="image/x-icon" href="/assets/images/ethiopian_logo.ico">
     <title>Admin Login</title>
     <style>
         body {
